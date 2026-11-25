@@ -50,8 +50,20 @@ function Get-FirewallBasicProjection {
     }
     Add-FirewallChanged 'parameters/deployGatewaySubnet/defaultValue' $true $false
     Add-FirewallAdded 'variables/_localFirewall' "[and(variables('_networkIsolation'), parameters('deployAzureFirewall'))]"
+    Add-FirewallAdded 'variables/_customerManagedRouting' "[and(and(and(and(parameters('useExistingVNet'), not(parameters('deploySubnets'))), not(parameters('deployAzureFirewall'))), not(variables('_hasExternalEgress'))), not(variables('_hasExistingRouteTable')))]"
     Add-FirewallAdded 'variables/_basicFirewallManagement' "[and(and(variables('_localFirewall'), equals(parameters('deploymentMode'), 'standalone')), equals(variables('_validatedAzureFirewallSku'), 'Basic'))]"
     Add-FirewallAdded 'variables/_validatedAzureFirewallSku' "[if(and(equals(parameters('azureFirewallSku'), 'Basic'), parameters('enableFirewallDnsProxy')), fail('Azure Firewall Basic does not support DNS proxy. Select Standard explicitly or disable enableFirewallDnsProxy.'), if(and(and(variables('_localFirewall'), not(equals(parameters('deploymentMode'), 'standalone'))), equals(parameters('azureFirewallSku'), 'Basic')), fail('Local Azure Firewall Basic is supported only in standalone mode. Use external hub egress with deployAzureFirewall=false or explicitly select Standard.'), if(and(variables('_networkIsolation'), or(and(variables('_hasExternalEgress'), variables('_hasExistingRouteTable')), and(parameters('deployAzureFirewall'), or(variables('_hasExternalEgress'), variables('_hasExistingRouteTable'))))), fail('Select exactly one egress owner: local firewall, external next-hop IP, or existing route table. Local firewall and external routing are mutually exclusive.'), if(and(and(and(variables('_networkIsolation'), not(parameters('deployAzureFirewall'))), not(variables('_hasExternalEgress'))), not(variables('_hasExistingRouteTable'))), fail('Network isolation with deployAzureFirewall=false requires an explicit external next-hop IP or existing route table. A hub VNet or deployment mode alone does not configure egress.'), parameters('azureFirewallSku')))))]"
+    $routingValidation = $projection.changes.variables.changes._validatedAzureFirewallSku
+    $routingValidation.after = $routingValidation.after.Replace(
+        "and(and(and(variables('_networkIsolation'), not(parameters('deployAzureFirewall'))), not(variables('_hasExternalEgress'))), not(variables('_hasExistingRouteTable')))",
+        "and(and(and(and(variables('_networkIsolation'), not(variables('_customerManagedRouting'))), not(parameters('deployAzureFirewall'))), not(variables('_hasExternalEgress'))), not(variables('_hasExistingRouteTable')))"
+    ).Replace(
+        'Network isolation with deployAzureFirewall=false requires an explicit external next-hop IP or existing route table. A hub VNet or deployment mode alone does not configure egress.',
+        'Isolated egress requires a local firewall, explicit external routing, or customer-managed routing with an existing VNet and subnet creation disabled.'
+    )
+    Add-FirewallChanged 'variables/_createRouteTable' `
+        "[and(variables('_networkIsolation'), not(variables('_hasExistingRouteTable')))]" `
+        "[and(and(variables('_networkIsolation'), not(variables('_customerManagedRouting'))), not(variables('_hasExistingRouteTable')))]"
     $definitionsBefore = $architecture.changes.variables.changes.subnetDefinitions.after
     $definitionsAfter = Copy-FirewallValue $definitionsBefore
     $definitionsAfter[4].create = "[coalesce(parameters('deployAzureFirewallSubnet'), variables('_localFirewall'))]"

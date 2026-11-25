@@ -458,6 +458,95 @@ run "reject_isolation_without_egress" {
   expect_failures = [terraform_data.network_contract]
 }
 
+run "reject_managed_byo_subnets_without_egress" {
+  command = plan
+  variables {
+    networkIsolation       = true
+    useExistingVNet        = true
+    existingVnetResourceId = "/subscriptions/00000000-0000-0000-0000-000000000004/resourceGroups/rg-shared/providers/Microsoft.Network/virtualNetworks/shared"
+    deploySubnets          = true
+    deployAzureFirewall    = false
+  }
+  plan_options {
+    target = [terraform_data.network_contract]
+  }
+  expect_failures = [terraform_data.network_contract]
+}
+
+run "customer_managed_subnets_have_no_managed_routing" {
+  command = plan
+  variables {
+    networkIsolation       = true
+    useExistingVNet        = true
+    existingVnetResourceId = "/subscriptions/00000000-0000-0000-0000-000000000004/resourceGroups/rg-shared/providers/Microsoft.Network/virtualNetworks/shared"
+    deploySubnets          = false
+    deployAzureFirewall    = false
+    deployAcrTaskAgentPool = false
+    deployContainerApps    = false
+    deployContainerEnv     = false
+    deploymentMode         = "ailz-integrated"
+  }
+  override_data {
+    target = data.azapi_resource.network_existing_subnet["agent"]
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000004/resourceGroups/rg-shared/providers/Microsoft.Network/virtualNetworks/shared/subnets/agent-subnet"
+      output = {
+        properties = {
+          delegations      = [{ properties = { serviceName = "Microsoft.App/environments" } }]
+          serviceEndpoints = [{ service = "Microsoft.CognitiveServices" }]
+        }
+      }
+    }
+  }
+  override_data {
+    target = data.azapi_resource.network_existing_subnet["pe"]
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000004/resourceGroups/rg-shared/providers/Microsoft.Network/virtualNetworks/shared/subnets/pe-subnet"
+      output = {
+        properties = {
+          delegations      = []
+          serviceEndpoints = [{ service = "Microsoft.AzureCosmosDB" }]
+        }
+      }
+    }
+  }
+  override_data {
+    target = data.azapi_resource.network_existing_subnet["applicationPe"]
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000004/resourceGroups/rg-shared/providers/Microsoft.Network/virtualNetworks/shared/subnets/application-pe-subnet"
+      output = {
+        properties = {
+          delegations      = []
+          serviceEndpoints = [{ service = "Microsoft.AzureCosmosDB" }]
+        }
+      }
+    }
+  }
+  assert {
+    condition = (
+      local.network_customer_managed_routing &&
+      length(local.managed_subnets) == 0 &&
+      length(module.network_vnet) == 0 &&
+      length(module.network_subnet) == 0 &&
+      length(module.network_firewall) == 0 &&
+      length(module.network_firewall_policy) == 0 &&
+      length(module.network_route_table) == 0 &&
+      length(azapi_resource.network_default_route) == 0 &&
+      local.network_context.route_table_id == "" &&
+      length(data.azapi_resource.network_existing_subnet) == 3
+    )
+    error_message = "Read-only subnet reuse must not create or associate managed routing or a local firewall."
+  }
+  assert {
+    condition = (
+      length(local.private_endpoints) > 0 &&
+      local.public_access.public_network_access == "Disabled" &&
+      local.foundry_agent_network_injection
+    )
+    error_message = "Customer-managed routing must retain private endpoints, private service access and Foundry injection."
+  }
+}
+
 run "reject_competing_egress_owners" {
   command = plan
   variables {

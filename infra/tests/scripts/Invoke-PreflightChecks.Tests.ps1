@@ -780,6 +780,37 @@ foreach ($case in @(
 Reset-Findings
 Test-Topology -P @{ networkIsolation = $true; azureFirewallSku = 'Standard'; enableFirewallDnsProxy = $true }
 Assert-True 'Explicit Standard permits DNS proxy without fallback' (@($script:Findings | Where-Object Severity -eq FAIL).Count -eq 0)
+foreach ($mode in 'standalone', 'ailz-integrated') {
+    foreach ($byo in $false, $true) {
+        foreach ($manageSubnets in $false, $true) {
+            Reset-Findings
+            Test-Topology -P @{
+                networkIsolation = $true; deploymentMode = $mode
+                useExistingVNet = $byo; deploySubnets = $manageSubnets
+                deployAzureFirewall = $false
+            }
+            $customerOwned = $byo -and -not $manageSubnets
+            Assert-True "Routing declaration ownership ($mode, byo=$byo, manage=$manageSubnets)" (
+                (@($script:Findings | Where-Object Code -eq EXTERNAL_EGRESS_REQUIRED).Count -eq 0) -eq $customerOwned
+            )
+            Assert-True "Customer routing is informational only ($mode, byo=$byo, manage=$manageSubnets)" (
+                @($script:Findings | Where-Object { $_.Code -eq 'CUSTOMER_MANAGED_ROUTING' -and $_.Severity -eq 'INFO' }).Count -eq [int]$customerOwned
+            )
+        }
+    }
+}
+foreach ($routing in 'hubIntegrationEgressNextHopIp', 'hubIntegrationExistingRouteTableResourceId') {
+    Reset-Findings
+    $explicitRouting = @{
+        networkIsolation = $true; useExistingVNet = $true
+        deploySubnets = $false; deployAzureFirewall = $false
+    }
+    $explicitRouting[$routing] = if ($routing -eq 'hubIntegrationEgressNextHopIp') { '10.0.0.4' } else { '/synthetic/routes' }
+    Test-Topology -P $explicitRouting
+    Assert-True "$routing retains explicit ownership without customer routing fallback" (
+        @($script:Findings | Where-Object { $_.Code -eq 'CUSTOMER_MANAGED_ROUTING' -or $_.Severity -eq 'FAIL' }).Count -eq 0
+    )
+}
 foreach ($gateway in $false, $true) {
     foreach ($routing in 'hubIntegrationEgressNextHopIp', 'hubIntegrationExistingRouteTableResourceId') {
         $p = @{ networkIsolation = $true; deploymentMode = 'ailz-integrated'; deployAzureFirewall = $false; hubIntegrationPeeringUseRemoteGateways = $gateway }

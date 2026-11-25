@@ -17,10 +17,17 @@ locals {
   network_dns_rg           = local.network_byo_placement ? local.network_vnet_rg : local.deployment_context.network_rg
   network_firewall         = var.networkIsolation && var.deployAzureFirewall
   network_basic_management = local.network_firewall && var.deploymentMode == "standalone" && var.azureFirewallSku == "Basic"
-  network_route_table      = var.networkIsolation && coalesce(var.hubIntegrationExistingRouteTableResourceId, " ") == " "
-  network_route_id         = local.network_route_table ? module.network_route_table[0].resource_id : coalesce(var.hubIntegrationExistingRouteTableResourceId, " ")
-  network_nat_id           = local.effective_flags.nat ? module.network_nat[0].resource_id : (var.existingNatGatewayResourceId == null ? "" : var.existingNatGatewayResourceId)
-  network_ingress_live     = var.publicIngress.sslCertSecretId != "" && var.publicIngress.frontendHostName != ""
+  network_customer_managed_routing = (
+    var.useExistingVNet &&
+    !var.deploySubnets &&
+    !var.deployAzureFirewall &&
+    trimspace(coalesce(var.hubIntegrationEgressNextHopIp, " ")) == "" &&
+    trimspace(coalesce(var.hubIntegrationExistingRouteTableResourceId, " ")) == ""
+  )
+  network_route_table  = var.networkIsolation && !local.network_customer_managed_routing && coalesce(var.hubIntegrationExistingRouteTableResourceId, " ") == " "
+  network_route_id     = local.network_route_table ? module.network_route_table[0].resource_id : coalesce(var.hubIntegrationExistingRouteTableResourceId, " ")
+  network_nat_id       = local.effective_flags.nat ? module.network_nat[0].resource_id : (var.existingNatGatewayResourceId == null ? "" : var.existingNatGatewayResourceId)
+  network_ingress_live = var.publicIngress.sslCertSecretId != "" && var.publicIngress.frontendHostName != ""
 
   public_access = {
     apply_ip_rules        = length(var.allowedIpRanges) > 0
@@ -252,8 +259,8 @@ resource "terraform_data" "network_contract" {
       error_message = "The managed AI Gateway subnet requires deployNsgs and a /27 or larger prefix."
     }
     precondition {
-      condition     = !var.networkIsolation || var.deployAzureFirewall || trimspace(coalesce(var.hubIntegrationEgressNextHopIp, " ")) != "" || trimspace(coalesce(var.hubIntegrationExistingRouteTableResourceId, " ")) != ""
-      error_message = "Isolated egress requires the local firewall, an external next-hop IP, or an existing route table."
+      condition     = !var.networkIsolation || local.network_customer_managed_routing || var.deployAzureFirewall || trimspace(coalesce(var.hubIntegrationEgressNextHopIp, " ")) != "" || trimspace(coalesce(var.hubIntegrationExistingRouteTableResourceId, " ")) != ""
+      error_message = "Isolated egress requires a local firewall, explicit external routing, or customer-managed routing with an existing VNet and subnet creation disabled."
     }
     precondition {
       condition     = !var.networkIsolation || !(var.deployAzureFirewall && (trimspace(coalesce(var.hubIntegrationEgressNextHopIp, " ")) != "" || trimspace(coalesce(var.hubIntegrationExistingRouteTableResourceId, " ")) != ""))

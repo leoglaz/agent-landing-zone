@@ -1316,10 +1316,12 @@ var _hasEffectiveAI           = _hasExistingAI || _createAppInsights
 //                                                             no local RT, no local default route. The
 //                                                             platform team's RT is attached to spoke subnets
 //                                                             and is assumed to already define egress routing.
-// Any other combination is invalid and surfaced by the pre-flight script (Gap 9).
+// Existing VNet with subnet creation and firewall disabled may leave routing
+// entirely customer-managed when neither external routing input is supplied.
 var _hasExistingRouteTable = !empty(hubIntegrationExistingRouteTableResourceId ?? '')
 var _hasExternalEgress     = !empty(hubIntegrationEgressNextHopIp ?? '')
 var _localFirewall = _networkIsolation && deployAzureFirewall
+var _customerManagedRouting = useExistingVNet && !deploySubnets && !deployAzureFirewall && !_hasExternalEgress && !_hasExistingRouteTable
 // Native callers must make the same explicit ownership/DNS choices as azd.
 // This value feeds subnet selection and the firewall deployment, so invalid
 // intent cannot turn into partial management networking or a fallback SKU.
@@ -1329,11 +1331,11 @@ var _validatedAzureFirewallSku = azureFirewallSku == 'Basic' && enableFirewallDn
     ? fail('Local Azure Firewall Basic is supported only in standalone mode. Use external hub egress with deployAzureFirewall=false or explicitly select Standard.')
     : _networkIsolation && ((_hasExternalEgress && _hasExistingRouteTable) || (deployAzureFirewall && (_hasExternalEgress || _hasExistingRouteTable)))
       ? fail('Select exactly one egress owner: local firewall, external next-hop IP, or existing route table. Local firewall and external routing are mutually exclusive.')
-      : _networkIsolation && !deployAzureFirewall && !_hasExternalEgress && !_hasExistingRouteTable
-        ? fail('Network isolation with deployAzureFirewall=false requires an explicit external next-hop IP or existing route table. A hub VNet or deployment mode alone does not configure egress.')
+      : _networkIsolation && !_customerManagedRouting && !deployAzureFirewall && !_hasExternalEgress && !_hasExistingRouteTable
+        ? fail('Isolated egress requires a local firewall, explicit external routing, or customer-managed routing with an existing VNet and subnet creation disabled.')
         : azureFirewallSku
 var _basicFirewallManagement = _localFirewall && deploymentMode == 'standalone' && _validatedAzureFirewallSku == 'Basic'
-var _createRouteTable      = _networkIsolation && !_hasExistingRouteTable
+var _createRouteTable      = _networkIsolation && !_customerManagedRouting && !_hasExistingRouteTable
 var _effectiveRouteTableId = _hasExistingRouteTable
   ? hubIntegrationExistingRouteTableResourceId!
   : (_createRouteTable ? resourceId(_networkResourceGroupName, 'Microsoft.Network/routeTables', '${const.abbrs.networking.routeTable}${resourceToken}') : '')

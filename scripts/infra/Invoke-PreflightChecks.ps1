@@ -443,14 +443,21 @@ function Test-Topology {
     # Local firewall + external egress
     $deployFw = Resolve-DeployFlag -P $P -Key 'deployAzureFirewall' -Default $true
     $isolated = ConvertTo-Bool $P['networkIsolation']
+    $customerManagedRouting = (Resolve-DeployFlag -P $P -Key 'useExistingVNet' -Default $false) -and
+        -not (Resolve-DeployFlag -P $P -Key 'deploySubnets' -Default $true) -and
+        -not $deployFw -and -not $egressIp -and -not $existingRt
     if ($isolated -and $deployFw -and ($egressIp -or $existingRt)) {
         Add-Finding -Severity FAIL -Code 'FW_AND_EXTERNAL_EGRESS' `
             -Message 'A local firewall and external next-hop/route-table ownership are mutually exclusive.' `
             -Hint 'Select local egress or set deployAzureFirewall=false and configure exactly one external routing option.'
     }
-    if ($isolated -and -not $deployFw -and -not $egressIp -and -not $existingRt) {
+    if ($isolated -and $customerManagedRouting) {
+        Add-Finding -Severity INFO -Code 'CUSTOMER_MANAGED_ROUTING' `
+            -Message 'Existing subnet routing is customer-managed. No local firewall, route table or default route will be created. The customer owns routing, outbound connectivity, DNS and network security; this check does not verify connectivity.'
+    }
+    if ($isolated -and -not $customerManagedRouting -and -not $deployFw -and -not $egressIp -and -not $existingRt) {
         Add-Finding -Severity FAIL -Code 'EXTERNAL_EGRESS_REQUIRED' `
-            -Message 'Network isolation with deployAzureFirewall=false requires an explicit external next-hop IP or existing route table. A hub VNet or deployment mode alone does not configure egress.'
+            -Message 'Isolated egress requires a local firewall, explicit external routing, or customer-managed routing with an existing VNet and subnet creation disabled.'
     }
     $sku = if ($P.ContainsKey('azureFirewallSku')) { Get-StringValue $P['azureFirewallSku'] } else { 'Basic' }
     if ($sku -cnotin 'Basic', 'Standard') {

@@ -26,6 +26,10 @@ try {
     $null = Invoke-ScopedProjection $clone (Get-FirewallBasicProjection)
     Assert-Equal 'projection never mutates deployed graph' (ConvertTo-Json -InputObject $t -Depth 100 -Compress) $before
     Assert-Equal 'ARM output budget unchanged' $t.outputs.Count 64
+    Assert-Equal 'customer routing requires read-only VNet reuse and no explicit egress' $t.variables._customerManagedRouting "[and(and(and(and(parameters('useExistingVNet'), not(parameters('deploySubnets'))), not(parameters('deployAzureFirewall'))), not(variables('_hasExternalEgress'))), not(variables('_hasExistingRouteTable')))]"
+    Assert-Equal 'customer routing suppresses managed route table' $t.variables._createRouteTable "[and(and(variables('_networkIsolation'), not(variables('_customerManagedRouting'))), not(variables('_hasExistingRouteTable')))]"
+    Assert-Equal 'route resource remains conditional' $t.resources.routeTable.condition "[variables('_createRouteTable')]"
+    Assert-Equal 'default route remains conditional' $t.resources.defaultRoute.condition "[variables('_createDefaultRoute')]"
     $f = $t.resources.firewall.properties.template
     Assert-Equal 'native and module SKU defaults agree' @($t.parameters.azureFirewallSku.defaultValue, $f.parameters.azureFirewallSku.defaultValue) @('Basic', 'Basic')
     Assert-Equal 'native SKU enum' $t.parameters.azureFirewallSku.allowedValues @('Basic', 'Standard')
