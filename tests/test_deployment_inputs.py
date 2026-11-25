@@ -540,11 +540,11 @@ def test_provider_defaults_and_native_custom_path(tmp_path):
     assert resolve_provider(tmp_path)["entrypoint"] == str((tmp_path / "custom bicep/platform.bicep").resolve())
 
 
-def test_checked_in_project_selects_moved_bicep_entrypoint():
+def test_checked_in_project_selects_terraform_entrypoint():
     selected = resolve_provider(ROOT)
     assert selected == {
-        "provider": "bicep", "path": "infra/bicep", "module": "main",
-        "entrypoint": str((ROOT / "infra/bicep/main.bicep").resolve()),
+        "provider": "terraform", "path": "infra/terraform", "module": "main",
+        "entrypoint": str((ROOT / "infra/terraform/main.tf").resolve()),
     }
 
 
@@ -764,4 +764,3 @@ def test_malformed_workload_profiles_fail_with_topology_error(bad_env):
         compose_parameters(source(), environment)
     with pytest.raises(DeploymentTopologyError):
         compose_inputs(values(), environment)
-

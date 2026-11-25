@@ -4,8 +4,8 @@ name: agent-landing-zone
 metadata:
   template: agent-landing-zone
 infra:
-  provider: bicep
-  path: infra/bicep
+  provider: terraform
+  path: infra/terraform
   module: main  
 hooks:
   predown:

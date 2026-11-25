@@ -37,6 +37,10 @@ full-resolution PNG. For Platform Hub and AI Gateway combinations, see the
 
 ## Deploy
 
+The azd entry point in this checkout selects the Terraform foundation under
+[`infra/terraform/`](infra/terraform/); Bicep remains available under
+[`infra/bicep/`](infra/bicep/).
+
 This checkout supports direct Terraform infrastructure deployment through
 `make init`, `make plan` and `make apply`, without azd or Task. `make bootstrap`
 is an alias for `make init`: it initializes the existing backend configured in
