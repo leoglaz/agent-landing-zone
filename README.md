@@ -37,6 +37,23 @@ full-resolution PNG. For Platform Hub and AI Gateway combinations, see the
 
 ## Deploy
 
+This checkout supports direct Terraform infrastructure deployment through
+`make init`, `make plan` and `make apply`, without azd or Task. `make bootstrap`
+is an alias for `make init`: it initializes the existing backend configured in
+the ignored `environments/dev/backend.json`. Copy and edit
+[`environments/dev/backend.json.example`](environments/dev/backend.json.example)
+to create it. Copy and edit
+[`terraform.tfvars.example`](environments/dev/terraform.tfvars.example) before
+planning. The backend must already exist and remain outside workload resource
+groups. See `make help` and the [Terraform guidance](https://azure.github.io/AI-Landing-Zones/agent-landing-zone/terraform/).
+This path does not run application builds or post-provision configuration hooks.
+The dev input example retains Foundry and Agent Service but disables local model
+deployments and Container Apps hosting. Models are supplied through your separate
+AI Gateway deployment; configuring agent-to-gateway connections is a separate step.
+Reusing an existing VNet with subnet creation and the local firewall disabled
+can leave routing customer-managed; no external routing input is required in
+that case. Customer-managed routing does not establish connectivity readiness.
+
 - [Full stack](https://azure.github.io/AI-Landing-Zones/agent-landing-zone/deploy-full-stack/) — Deploy the infrastructure and default agent application.
 - [Infrastructure only](https://azure.github.io/AI-Landing-Zones/agent-landing-zone/deploy-infra-only/) — Provision the foundation without deploying application images.
 - [Custom applications](https://azure.github.io/AI-Landing-Zones/agent-landing-zone/build-your-own-app/) — Deploy your own application on the foundation.

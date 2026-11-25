@@ -127,5 +127,6 @@ crash.*.log
 *.tfbackend
 *.backend.conf
 *.backend.conf.json
+environments/*/backend.json
 !infra/terraform/provider.conf.json
 !infra/terraform/.terraform.lock.hcl

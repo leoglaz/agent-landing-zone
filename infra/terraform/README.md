@@ -94,6 +94,76 @@ The adapter records the exact backend address in private
 original resource-group and application bindings on a clean runner. Preparation
 and teardown reject retargeted addresses or missing deployment ownership.
 
+## Direct Terraform workflow
+
+The root Makefile can operate this composition without azd or its adapter.
+`make bootstrap` is an alias for `make init`: both initialize the existing
+remote backend using `environments/<environment>/backend.json`, including its
+complete `key`. They do not create the state resource group, account or
+container, and do not automatically reconfigure or migrate state.
+
+Copy `environments/dev/backend.json.example` to the ignored
+`environments/dev/backend.json` and supply the existing state resource group,
+storage account, container and complete state key. Keep environment-specific
+backend settings local; only the placeholder example is committed.
+
+Copy `environments/dev/terraform.tfvars.example` to the ignored
+`environments/dev/terraform.tfvars`, supply the subscription, principal object
+ID, workload group and region, and authenticate with Azure CLI. Its active
+subscription must match `subscriptionId`. The example sets
+`createResourceGroup = true`, so apply creates and owns the workload group;
+set it to false for an existing group. Never use the backend resource group
+as a workload destination.
+
+The dev example sets `deployModelDeployments`, `deployContainerApps` and
+`deployContainerEnv` to false. It retains the Foundry account/project and Agent
+Service dependencies, without local model deployments or Container Apps shells.
+This does not configure gateway connections or publish agents. The registry and
+other service flags remain at their root defaults. These are deployment-specific
+selections using existing inputs shared with Bicep, not changes to provider defaults.
+
+The dev example creates an isolated Canada East VNet in the workload resource
+group, using the root's default subnet names and address ranges. Foundry agent
+injection and private endpoints are also in Canada East. Distinct foundation
+and application endpoint subnets avoid name collisions; managed subnets receive
+their declared service endpoints. The existing Canada Central VNet is not
+referenced, modified or peered.
+
+The dev example explicitly selects `deploymentMode = "standalone"` and
+`deployAzureFirewall = false`. With managed networking, declare exactly one
+external routing input: `hubIntegrationExistingRouteTableResourceId` or
+`hubIntegrationEgressNextHopIp`. Alternatively, `useExistingVNet = true` together
+with `deploySubnets = false` and `deployAzureFirewall = false` permits
+customer-managed routing when neither external routing input is supplied.
+Both providers then create no firewall, route table or default route and do not
+modify subnet routing associations. The customer owns routing, outbound
+connectivity, DNS and network security in both standalone and integrated modes.
+Explicit routing selections retain their existing behavior: an existing route
+table avoids managed route-table creation; a next-hop IP selects managed routing.
+With subnet creation disabled, the customer must manage those associations.
+
+Platform agents' external dependencies must be verified separately; declared
+routing is not evidence of internet access or outbound filtering. ACR build pool, jumpbox, Bastion and NAT
+creation remain disabled. A network-connected runner with working private DNS
+is required for operations that access private service endpoints. Offline plans
+do not verify regional capacity, permissions, outbound reachability or deployment
+success. Customer-managed routing is an informational preflight finding, not
+proof that outbound connectivity works. Managed networking still requires egress.
+
+`make plan` writes an ignored saved plan; `make apply` creates a fresh plan and
+applies that exact file. Native state locking remains enabled. Each environment
+has a separate `TF_DATA_DIR` under `.terraform/`; offline validation uses its
+own directory. Select distinct backend keys for distinct environments.
+
+This path consumes explicit native Terraform variables and their root defaults,
+not `main.parameters.json` substitutions or azd environment settings. The root
+may provision placeholder Container Apps; it does not build the pinned runtime
+images. Foundry/Search service configuration, runtime registration and other
+post-provision hooks are not run. Terraform outputs alone do not mean the
+application is ready. Keep the existing azd workflow separate; do not run both
+workflows concurrently against the same state or adopt a deployed azd
+environment without separately reviewing its state and inputs.
+
 ## Naming and outputs
 
 Generated names preserve CAF and legacy modes, service prefixes, legal length

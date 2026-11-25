@@ -1,0 +1,24 @@
+subscriptionId      = "<azure-subscription-id>"
+principalId         = "<entra-object-id>"
+principalType       = "User"
+environmentName     = "dev"
+resourceGroupName   = "<workload-resource-group>"
+location            = "canadaeast"
+createResourceGroup = true
+
+deployModelDeployments = false
+deployContainerApps    = false
+deployContainerEnv     = false
+
+networkIsolation        = true
+useExistingVNet         = false
+privateEndpointLocation = "canadaeast"
+deploySubnets           = true
+deployAiFoundrySubnet   = true
+
+deploymentMode         = "standalone"
+deployAzureFirewall    = false
+deployAcrTaskAgentPool = false
+deployJumpbox          = false
+deployBastion          = false
+deployNatGateway       = false
